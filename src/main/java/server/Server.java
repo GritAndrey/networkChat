@@ -1,63 +1,63 @@
 package server;
 
 import java.io.DataInputStream;
-import java.io.DataOutputStream;
 import java.io.IOException;
+import java.io.ObjectOutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Locale;
-import java.util.Map;
 
 public class Server {
+    static ArrayList<User> users;
+
     public static void main(String[] args) {
-        ArrayList<Socket> clientSockets = new ArrayList<>();
-        Map<Socket, String> clientNames = new HashMap<>();
+        users = new ArrayList<>();
         try {
             ServerSocket serverSocket = new ServerSocket(8188); // Создаёи серверный сокет
             System.out.println("Сервер запущен");
             while (true) { // бесконечный цикл для ожидания подключения клиентов
                 System.out.println("Ожидаю подключения клиентов...");
                 Socket socket = serverSocket.accept(); // Ожидаем подключения клиента
-
-                clientSockets.add(socket);
-                clientNames.put(socket,"Nameless");
-
+                User currentUser = new User(socket);
+                users.add(currentUser);
                 System.out.println("Клиент подключился");
                 DataInputStream in = new DataInputStream(socket.getInputStream()); // Поток ввода
-                DataOutputStream out = new DataOutputStream(socket.getOutputStream()); // Поток вывода
-
-
-
+                ObjectOutputStream oos = new ObjectOutputStream(socket.getOutputStream()); // Поток вывода
+                currentUser.setOos(oos);
                 Thread thread = new Thread(new Runnable() {
                     @Override
                     public void run() {
                         String request = null;
-                        while (true) {
-                            try {
-                                if(clientNames.get(socket).equals("Nameless")) {
-                                    out.writeUTF("Привет " + clientNames.get(socket));
-                                    out.writeUTF("Как тебя величать? ->");
-                                    clientNames.put(socket, in.readUTF());
-                                    out.writeUTF("Hello " + clientNames.get(socket));
-                                }
-
+                        try {
+                            currentUser.getOos().writeObject("Как тебя величать? ->");
+                            currentUser.setUserName(in.readUTF());
+                            sendUserList();
+                            currentUser.getOos().writeObject("Добро пожаловать! " + currentUser.getUserName());
+                            while (true) {
                                 request = in.readUTF(); // Принимает сообщение от клиента
                                 System.out.println("Клиент прислал: " + request);
-                                for (Socket clientSocket : clientSockets) { // Перебираем клиентов которые подключенны в настоящий момент
-                                    DataOutputStream out = new DataOutputStream(clientSocket.getOutputStream());
-
-                                    if(!socket.equals(clientSocket)) {
-                                        out.writeUTF("Получено сообщение от пользователя: " + clientNames.get(socket));
-                                        out.writeUTF(request.toUpperCase(Locale.ROOT)); // Рассылает принятое сообщение всем клиентам
+                                for (User user : users) { // Перебираем клиентов которые подключенны в настоящий момент
+                                    if (!user.getUserName().equals(currentUser.getUserName())) {
+                                        user.getOos().writeObject(currentUser.getUserName() + ": ");
+                                        user.getOos().writeObject(request); // Рассылает принятое сообщение всем клиентам
                                     }
                                 }
-                            } catch (IOException ex) {
-                                ex.printStackTrace();
-                                clientSockets.remove(socket); // Удаление сокета, когда клиент отключился
-                                break;
                             }
+                        } catch (IOException ex) {
+                            ex.printStackTrace();
+                            users.remove(currentUser); // Удаление сокета, когда клиент отключился
+                            for (User user : users) { // Перебираем клиентов которые подключенны в настоящий момент
+
+                                if (!user.getUserName().equals(currentUser.getUserName())) {
+                                    try {
+                                        user.getOos().writeObject("Пользователь " + currentUser.getUserName() + " покинул чат");
+
+                                    } catch (IOException e) {
+                                        e.printStackTrace();
+                                    }
+                                }
+                            }
+                            sendUserList();
                         }
                     }
                 });
@@ -65,8 +65,27 @@ public class Server {
             }
 
 
-        } catch (IOException e) {
-            e.printStackTrace();
+        }
+     catch (IOException e) {
+        e.printStackTrace();
+    }
+}
+
+
+
+    private static void sendUserList() {
+        String userName = "**userList**";
+        for (User user : users) {
+            userName += "//" + user.getUserName();
+        }
+        for (User user : users
+        ) {
+            try {
+                user.getOos().writeObject(userName);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+
         }
     }
 }
