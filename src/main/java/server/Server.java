@@ -44,10 +44,14 @@ public class Server {
                                 }
                             }
                         } catch (IOException ex) {
-                            ex.printStackTrace();
+                            try {
+                                currentUser.getSocket().close();
+                                System.out.println("Сокет закрыт");
+                            } catch (IOException e) {
+                                e.printStackTrace();
+                            }
                             users.remove(currentUser); // Удаление сокета, когда клиент отключился
                             for (User user : users) { // Перебираем клиентов которые подключенны в настоящий момент
-
                                 if (!user.getUserName().equals(currentUser.getUserName())) {
                                     try {
                                         user.getOos().writeObject("Пользователь " + currentUser.getUserName() + " покинул чат");
@@ -58,6 +62,7 @@ public class Server {
                                 }
                             }
                             sendUserList();
+
                         }
                     }
                 });
